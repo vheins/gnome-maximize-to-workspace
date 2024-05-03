@@ -1,5 +1,9 @@
-const Meta = imports.gi.Meta;
-const GLib = imports.gi.GLib;
+//const Meta = imports.gi.Meta;
+//const GLib = imports.gi.GLib;
+
+import Meta from 'gi://Meta';
+import GLib from 'gi://GLib';
+import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 
 /* This has been tested with dynamic workspaces. It works well with dynamic workspaces, but can work well with static if you have enough static ones.
  * Works well with external monitor as well, the idea being windows opened on external monitor are meant for just that monitor.
@@ -121,30 +125,35 @@ function handleWindowClose(act) {
 // need to understand "handles", these are just object arrays to store the "handles" that connect with signals
 const _window_manager_handles = [];
 
-// Runs when the extension is enabled, basically connects to the signals and save the handles
-// whenever the signal is emitted our connected handles, process the signal.
-function enable() {
-  // removing delay and using map again
-  _window_manager_handles.push(global.window_manager.connect('map', (_, act, change) => {
-    if (act.meta_window.get_maximized() === Meta.MaximizeFlags.BOTH) {
-      check(act.meta_window, change);
-    }
-  }));
-  // Add size-change event handler for windows that are already created.
-  _window_manager_handles.push(global.window_manager.connect('size-change', (_, act, change) => {
-    // check(act.meta_window, change);
-    GLib.timeout_add(GLib.PRIORITY_LOW, 300, check.bind(this, act.meta_window, change));
-  }));
-  _window_manager_handles.push(global.window_manager.connect('destroy', (_, act) => {
-    handleWindowClose(act);
-  }));
+
+class MaximizeToWorkSpace extends Extension {
+  // Runs when the extension is enabled, basically connects to the signals and save the handles
+  // whenever the signal is emitted our connected handles, process the signal.
+  enable() {
+    // removing delay and using map again
+    _window_manager_handles.push(global.window_manager.connect('map', (_, act, change) => {
+      if (act.meta_window.get_maximized() === Meta.MaximizeFlags.BOTH) {
+        check(act.meta_window, change);
+      }
+    }));
+    // Add size-change event handler for windows that are already created.
+    _window_manager_handles.push(global.window_manager.connect('size-change', (_, act, change) => {
+      // check(act.meta_window, change);
+      GLib.timeout_add(GLib.PRIORITY_LOW, 300, check.bind(this, act.meta_window, change));
+    }));
+    _window_manager_handles.push(global.window_manager.connect('destroy', (_, act) => {
+      handleWindowClose(act);
+    }));
+  }
+
+  // As the name suggests, runs when extension is disabled, basically disconnect the handles.
+  disable() {
+    // Why is the splice required? well we are emptying the array, can't really say what will happen if we do not use splice 
+    // as I did not try it, this came from the legacy code, I suspect if we reenable the extension there might be issues.
+
+    // we just disconnet the handlers for the events.
+    _window_manager_handles.splice(0).forEach(h => global.window_manager.disconnect(h));
+  }
 }
 
-// As the name suggests, runs when extension is disabled, basically disconnect the handles.
-function disable() {
-  // Why is the splice required? well we are emptying the array, can't really say what will happen if we do not use splice 
-  // as I did not try it, this came from the legacy code, I suspect if we reenable the extension there might be issues.
-
-  // we just disconnet the handlers for the events.
-  _window_manager_handles.splice(0).forEach(h => global.window_manager.disconnect(h));
-}
+export default MaximizeToWorkSpace;
